@@ -175,7 +175,7 @@ async def register(user_data: dict):
     expires_at = (datetime.now() + timedelta(minutes=30)).isoformat()
     cursor.execute(
         "INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)",
-        (email, verification_code, "email_verification", expires_at.isoformat())
+        (email, verification_code, "email_verification", expires_at)
     )
     conn.commit()
     conn.close()
@@ -255,7 +255,7 @@ async def forgot_password(email_data: dict):
     expires_at = (datetime.now() + timedelta(minutes=30)).isoformat()
     cursor.execute(
         "INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)",
-        (email, reset_code, "password_reset", expires_at.isoformat())
+        (email, reset_code, "password_reset", expires_at)
     )
     conn.commit()
     conn.close()
