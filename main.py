@@ -81,8 +81,10 @@ def generate_verification_code():
     return str(secrets.randbelow(900000) + 100000)  
 class EmailService:
     def __init__(self):
-        self.brevo_api_key = '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'  # Dein API Key
-        self.brevo_url = "https://api.brevo.com/v3/smtp/email"
+        self.smtp_server = "smtp.gmail.com"
+        self.smtp_port = 587
+        self.sender_email = "forcedentry.game@gmail.com"  # Your Gmail
+        self.app_password = "ffyi puqc wtkg cqju"  # The 16-char password from Step 2
     
     async def send_verification_email(self, email: str, code: str) -> bool:
         html_content = f"""
@@ -97,7 +99,7 @@ class EmailService:
         </div>
         """
         
-        return await self._send_brevo_email(email, "Forced Entry Verification", html_content)
+        return await self._send_smtp_email(email, "Forced Entry Verification", html_content)
     
     async def send_password_reset_email(self, email: str, code: str) -> bool:
         html_content = f"""
@@ -111,37 +113,36 @@ class EmailService:
         </div>
         """
         
-        return await self._send_brevo_email(email, "Password Reset - Forced Entry", html_content)
+        return await self._send_smtp_email(email, "Password Reset - Forced Entry", html_content)
     
-    async def _send_brevo_email(self, to_email: str, subject: str, html_content: str) -> bool:
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    self.brevo_url,
-                    headers={
-                        "api-key": self.brevo_api_key,
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "sender": {
-                            "name": "Forced Entry",
-                            "email": "forcedentry.game@gmail.com"  # Deine verifizierte Email
-                        },
-                        "to": [{"email": to_email}],
-                        "subject": subject,
-                        "htmlContent": html_content
-                    }
-                )
-                print(f"📧 Brevo Response: {response.status_code}")
-                if response.status_code == 201:
-                    print(f"✅ Email sent to {to_email}")
-                    return True
-                else:
-                    print(f"❌ Brevo error: {response.text}")
-                    return False
-            except Exception as e:
-                print(f"❌ Brevo exception: {e}")
-                return False
+    async def _send_smtp_email(self, to_email: str, subject: str, html_content: str) -> bool:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
+        try:
+            # Create message
+            message = MIMEMultipart("alternative")
+            message["Subject"] = subject
+            message["From"] = self.sender_email
+            message["To"] = to_email
+            
+            # Create HTML version
+            html_part = MIMEText(html_content, "html")
+            message.attach(html_part)
+            
+            # Send email
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()  # Secure the connection
+                server.login(self.sender_email, self.app_password)
+                server.send_message(message)
+            
+            print(f"✅ Email sent to {to_email}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ SMTP error: {e}")
+            return False
 
 email_service = EmailService()
 
