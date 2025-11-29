@@ -1,3 +1,4 @@
+# main.py - Complete FastAPI Backend
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
@@ -7,19 +8,50 @@ import sqlite3
 import bcrypt
 import httpx
 import os
+
 app = FastAPI(title="Forced Entry API")
+
+# CORS middleware - FIXED
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins for now
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ========== DATABASE SETUP ==========
 def init_db():
     conn = sqlite3.connect('forced_entry.db')
     cursor = conn.cursor()
-    cursor.execute()
-    cursor.execute()
+    
+    # Users table - FIXED: Added proper SQL
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            email_verified BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Verification codes table - FIXED: Added proper SQL
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS verification_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            code TEXT NOT NULL,
+            type TEXT NOT NULL,
+            used BOOLEAN DEFAULT FALSE,
+            expires_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    conn.commit()
+
     conn.commit()
     conn.close()
 init_db()
