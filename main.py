@@ -81,7 +81,7 @@ def generate_verification_code():
     return str(secrets.randbelow(900000) + 100000)  
 class EmailService:
     def __init__(self):
-        self.brevo_api_key = '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'  # Dein API Key
+        self.brevo_api_key = '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'  # Dein API Key
         self.brevo_url = "https://api.brevo.com/v3/smtp/email"
     
     async def send_verification_email(self, email: str, code: str) -> bool:
