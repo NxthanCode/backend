@@ -127,7 +127,16 @@ class EmailService:
                 return response.status_code == 200
             except:
                 return False
+            
+
 email_service = EmailService()
+
+
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(rest_of_path: str):
+    return {"message": "CORS preflight"}
+
+
 @app.post("/register")
 async def register(user_data: dict):
     username = user_data.get('username')
