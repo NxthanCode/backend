@@ -84,7 +84,7 @@ class EmailService:
         self.smtp_server = "smtp.gmail.com"
         self.smtp_port = 587
         self.sender_email = "forcedentry.game@gmail.com"  # Your Gmail
-        self.app_password = "ffyi puqc wtkg cqju"  # The 16-char password from Step 2
+        self.app_password = "ffyipuqcwtkgcqju"  # The 16-char password from Step 2
     
     async def send_verification_email(self, email: str, code: str) -> bool:
         html_content = f"""
