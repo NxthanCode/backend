@@ -81,53 +81,67 @@ def generate_verification_code():
     return str(secrets.randbelow(900000) + 100000)  
 class EmailService:
     def __init__(self):
-        self.resend_api_key = 're_NwBg9CPD_DuosziL5TgnbpC6uMtm38p4n'
-        self.resend_api_url = "https://api.resend.com/emails"
+        self.brevo_api_key = 'Bk1RgxMS2GHOpKDq'  # Dein API Key
+        self.brevo_url = "https://api.brevo.com/v3/smtp/email"
+    
     async def send_verification_email(self, email: str, code: str) -> bool:
         html_content = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #333; text-align: center;">Welcome to Forced Entry!</h2>
-            <p>Thank you for registering. Use the verification code below:</p>
+            <p>Your verification code:</p>
             <div style="background: #f4f4f4; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
                 <h1 style="color: #000; font-size: 32px; letter-spacing: 5px; margin: 0;">{code}</h1>
             </div>
-            <p>Enter this code to activate your account.</p>
-            <p style="color: #666; font-size: 12px;">This code expires in 30 minutes.</p>
-        </div>"""
-        return await self._send_email(email, "Verify Your Email - Forced Entry", html_content)
+            <p>Enter this code to verify your account.</p>
+            <p style="color: #666; font-size: 12px;">This code will expire in 30 minutes.</p>
+        </div>
+        """
+        
+        return await self._send_brevo_email(email, "Forced Entry Verification", html_content)
+    
     async def send_password_reset_email(self, email: str, code: str) -> bool:
         html_content = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #333; text-align: center;">Password Reset Request</h2>
-            <p>Use this code to reset your password:</p>
+            <h2 style="color: #333; text-align: center;">Password Reset</h2>
+            <p>Your password reset code:</p>
             <div style="background: #f4f4f4; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
                 <h1 style="color: #000; font-size: 32px; letter-spacing: 5px; margin: 0;">{code}</h1>
             </div>
             <p>Enter this code to reset your password.</p>
         </div>
-
-"""
-        return await self._send_email(email, "Password Reset - Forced Entry", html_content)
-    async def _send_email(self, to_email: str, subject: str, html_content: str) -> bool:
+        """
+        
+        return await self._send_brevo_email(email, "Password Reset - Forced Entry", html_content)
+    
+    async def _send_brevo_email(self, to_email: str, subject: str, html_content: str) -> bool:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    self.resend_api_url,
+                    self.brevo_url,
                     headers={
-                        "Authorization": f"Bearer {self.resend_api_key}",
+                        "api-key": self.brevo_api_key,
                         "Content-Type": "application/json"
                     },
                     json={
-                        "from": "Forced Entry <onboarding@resend.dev>",
-                        "to": [to_email],
+                        "sender": {
+                            "name": "Forced Entry",
+                            "email": "forcedentry.game@gmail.com"  # Deine verifizierte Email
+                        },
+                        "to": [{"email": to_email}],
                         "subject": subject,
-                        "html": html_content
+                        "htmlContent": html_content
                     }
                 )
-                return response.status_code == 200
-            except:
+                print(f"📧 Brevo Response: {response.status_code}")
+                if response.status_code == 201:
+                    print(f"✅ Email sent to {to_email}")
+                    return True
+                else:
+                    print(f"❌ Brevo error: {response.text}")
+                    return False
+            except Exception as e:
+                print(f"❌ Brevo exception: {e}")
                 return False
-            
 
 email_service = EmailService()
 
