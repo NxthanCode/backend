@@ -172,7 +172,7 @@ async def register(user_data: dict):
     )
     user_id = cursor.lastrowid
     verification_code = generate_verification_code()
-    expires_at = datetime.now().isoformat() + timedelta(minutes=30)
+    expires_at = (datetime.now() + timedelta(minutes=30)).isoformat()
     cursor.execute(
         "INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)",
         (email, verification_code, "email_verification", expires_at.isoformat())
@@ -252,7 +252,7 @@ async def forgot_password(email_data: dict):
         conn.close()
         return {"message": "If an account exists, a reset code has been sent"}
     reset_code = generate_verification_code()
-    expires_at = datetime.now().isoformat() + timedelta(minutes=30)
+    expires_at = (datetime.now() + timedelta(minutes=30)).isoformat()
     cursor.execute(
         "INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)",
         (email, reset_code, "password_reset", expires_at.isoformat())
