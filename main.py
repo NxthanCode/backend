@@ -172,7 +172,7 @@ async def register(user_data: dict):
     )
     user_id = cursor.lastrowid
     verification_code = generate_verification_code()
-    expires_at = (datetime.now() + timedelta(minutes=30)).isoformat()
+    expires_at = datetime.now() + timedelta(minutes=30)
     cursor.execute(
         "INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)",
         (email, verification_code, "email_verification", expires_at)
@@ -193,7 +193,7 @@ async def verify_email(verification_data: dict):
     cursor = conn.cursor()
     cursor.execute(
         "SELECT * FROM verification_codes WHERE email = ? AND code = ? AND type = 'email_verification' AND used = FALSE AND expires_at > ?",
-        (email, code, datetime.now().isoformat())
+        (email, code, datetime.now())
     )
     code_record = cursor.fetchone()
     if not code_record:
@@ -252,7 +252,7 @@ async def forgot_password(email_data: dict):
         conn.close()
         return {"message": "If an account exists, a reset code has been sent"}
     reset_code = generate_verification_code()
-    expires_at = (datetime.now() + timedelta(minutes=30)).isoformat()
+    expires_at = datetime.now() + timedelta(minutes=30)
     cursor.execute(
         "INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)",
         (email, reset_code, "password_reset", expires_at)
@@ -270,7 +270,7 @@ async def reset_password(reset_data: dict):
     cursor = conn.cursor()
     cursor.execute(
         "SELECT * FROM verification_codes WHERE email = ? AND code = ? AND type = 'password_reset' AND used = FALSE AND expires_at > ?",
-        (email, code, datetime.now().isoformat())
+        (email, code, datetime.now())
     )
     code_record = cursor.fetchone()
     if not code_record:
