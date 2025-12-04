@@ -1,310 +1,122 @@
-# main.py - Complete FastAPI Backend
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timedelta
-import secrets
-import jwt
-import sqlite3
-import bcrypt
-import httpx
+import discord
+from discord.ext import commands
 import os
 
-app = FastAPI(title="Forced Entry API")
+import asyncio
 
-# CORS middleware - FIXED
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for now
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-# ========== DATABASE SETUP ==========
-def init_db():
-    conn = sqlite3.connect('forced_entry.db')
-    cursor = conn.cursor()
-    
-    # Users table - FIXED: Added proper SQL
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            email_verified BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Verification codes table - FIXED: Added proper SQL
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS verification_codes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL,
-            code TEXT NOT NULL,
-            type TEXT NOT NULL,
-            used BOOLEAN DEFAULT FALSE,
-            expires_at TIMESTAMP NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    conn.commit()
 
-    conn.commit()
-    conn.close()
-init_db()
-SECRET_KEY = "forced-entry-" + secrets.token_urlsafe(32)
-ALGORITHM = "HS256"
-def get_db_connection():
-    conn = sqlite3.connect('forced_entry.db')
-    conn.row_factory = sqlite3.Row
-    return conn
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
-def create_access_token(user_id: int):
-    expires = datetime.utcnow() + timedelta(days=7)
-    payload = {"user_id": user_id, "exp": expires}
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-def verify_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-def generate_verification_code():
-    return str(secrets.randbelow(900000) + 100000)  
-class EmailService:
-    def __init__(self):
-        self.smtp_server = "smtp.gmail.com"
-        self.smtp_port = 587
-        self.sender_email = "forcedentry.game@gmail.com"  # Your Gmail
-        self.app_password = "ffyipuqcwtkgcqju"  # The 16-char password from Step 2
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix='!', intents=intents)
+
+# Your specific voice channel ID
+TARGET_VOICE_CHANNEL_ID = 1372629926162993217
+
+@bot.event
+async def on_ready():
+    print(f'✅ Logged in as: {bot.user.name}')
+    print(f'🆔 Bot ID: {bot.user.id}')
     
-    async def send_verification_email(self, email: str, code: str) -> bool:
-        html_content = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #333; text-align: center;">Welcome to Forced Entry!</h2>
-            <p>Your verification code:</p>
-            <div style="background: #f4f4f4; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
-                <h1 style="color: #000; font-size: 32px; letter-spacing: 5px; margin: 0;">{code}</h1>
-            </div>
-            <p>Enter this code to verify your account.</p>
-            <p style="color: #666; font-size: 12px;">This code will expire in 30 minutes.</p>
-        </div>
-        """
-        
-        return await self._send_smtp_email(email, "Forced Entry Verification", html_content)
+    # Join the voice channel immediately
+    await join_target_channel()
     
-    async def send_password_reset_email(self, email: str, code: str) -> bool:
-        html_content = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #333; text-align: center;">Password Reset</h2>
-            <p>Your password reset code:</p>
-            <div style="background: #f4f4f4; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
-                <h1 style="color: #000; font-size: 32px; letter-spacing: 5px; margin: 0;">{code}</h1>
-            </div>
-            <p>Enter this code to reset your password.</p>
-        </div>
-        """
-        
-        return await self._send_smtp_email(email, "Password Reset - Forced Entry", html_content)
+    # Start background task
+    bot.loop.create_task(maintain_voice_connection())
+
+async def join_target_channel():
+    """Join the target voice channel"""
+    print(f'🔍 Looking for voice channel ID: {TARGET_VOICE_CHANNEL_ID}')
     
-    async def _send_smtp_email(self, to_email: str, subject: str, html_content: str) -> bool:
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
+    # Check ALL servers the bot is in
+    for guild in bot.guilds:
+        print(f'\n📡 Checking server: {guild.name}')
         
+        # Try to find the channel in this guild
+        voice_channel = guild.get_channel(TARGET_VOICE_CHANNEL_ID)
+        
+        if voice_channel:
+            print(f'✅ Found channel: #{voice_channel.name}')
+            print(f'   Guild: {voice_channel.guild.name}')
+            
+            # Check if already connected in this guild
+            if guild.voice_client:
+                print(f'⚠️ Already connected in this guild')
+                return True
+            
+            try:
+                # Connect to voice
+                print(f'🔗 Attempting to connect...')
+                vc = await voice_channel.connect(timeout=10.0, reconnect=True)
+                
+                # Self-deafen and mute
+                print(f'🔇 Setting mute/deafen...')
+                await vc.guild.change_voice_state(
+                    channel=vc.channel,
+                    self_mute=True,
+                    self_deaf=True
+                )
+                
+                print(f'🎉 Successfully joined and set to silent mode!')
+                print(f'   Channel: #{voice_channel.name}')
+                print(f'   Server: {voice_channel.guild.name}')
+                print(f'   Muted: {vc.self_mute}')
+                print(f'   Deafened: {vc.self_deaf}')
+                return True
+                
+            except Exception as e:
+                print(f'❌ Error connecting: {type(e).__name__}: {e}')
+                return False
+    
+    print(f'❌ Could not find voice channel!')
+    return False
+
+async def maintain_voice_connection():
+    """Keep the voice connection alive"""
+    await bot.wait_until_ready()
+    
+    # Track connection attempts
+    connection_attempts = 0
+    max_attempts = 5
+    
+    while not bot.is_closed():
         try:
-            # Create message
-            message = MIMEMultipart("alternative")
-            message["Subject"] = subject
-            message["From"] = self.sender_email
-            message["To"] = to_email
+            # Check if bot is connected
+            connected = False
+            for guild in bot.guilds:
+                voice_client = guild.voice_client
+                if voice_client and voice_client.is_connected():
+                    connected = True
+                    
+                    # Ensure muted and deafened
+                    if not voice_client.self_deaf or not voice_client.self_mute:
+                        await voice_client.guild.change_voice_state(
+                            channel=voice_client.channel,
+                            self_mute=True,
+                            self_deaf=True
+                        )
+                        print(f'🔧 Fixed mute/deafen state')
+                    break
             
-            # Create HTML version
-            html_part = MIMEText(html_content, "html")
-            message.attach(html_part)
+            # If not connected, try to reconnect
+            if not connected:
+                connection_attempts += 1
+                print(f'🔌 Connection lost, attempting to reconnect ({connection_attempts}/{max_attempts})...')
+                
+                if connection_attempts <= max_attempts:
+                    success = await join_target_channel()
+                    if success:
+                        connection_attempts = 0  # Reset on success
+                else:
+                    print(f'⚠️ Max reconnection attempts reached. Waiting...')
+                    connection_attempts = 0
             
-            # Send email
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()  # Secure the connection
-                server.login(self.sender_email, self.app_password)
-                server.send_message(message)
-            
-            print(f"✅ Email sent to {to_email}")
-            return True
+            # Wait before checking again
+            await asyncio.sleep(10)
             
         except Exception as e:
-            print(f"❌ SMTP error: {e}")
-            return False
+            print(f'⚠️ Error in maintainer: {type(e).__name__}: {e}')
+            await asyncio.sleep(30)
 
-email_service = EmailService()
-
-
-@app.options("/{rest_of_path:path}")
-async def preflight_handler(rest_of_path: str):
-    return {"message": "CORS preflight"}
-
-
-@app.post("/register")
-async def register(user_data: dict):
-    username = user_data.get('username')
-    email = user_data.get('email')
-    password = user_data.get('password')
-    if not username or not email or not password:
-        raise HTTPException(status_code=400, detail="All fields are required")
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE email = ? OR username = ?", (email, username))
-    if cursor.fetchone():
-        conn.close()
-        raise HTTPException(status_code=400, detail="User already exists")
-    password_hash = hash_password(password)
-    cursor.execute(
-        "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
-        (username, email, password_hash)
-    )
-    user_id = cursor.lastrowid
-    verification_code = generate_verification_code()
-    expires_at = datetime.now() + timedelta(minutes=30)
-    cursor.execute(
-        "INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)",
-        (email, verification_code, "email_verification", expires_at)
-    )
-    conn.commit()
-    conn.close()
-    email_sent = await email_service.send_verification_email(email, verification_code)
-    return {
-        "message": "Registration successful. Check your email for verification code.",
-        "user_id": user_id,
-        "email_sent": email_sent
-    }
-@app.post("/verify-email")
-async def verify_email(verification_data: dict):
-    email = verification_data.get('email')
-    code = verification_data.get('code')
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM verification_codes WHERE email = ? AND code = ? AND type = 'email_verification' AND used = FALSE AND expires_at > ?",
-        (email, code, datetime.now())
-    )
-    code_record = cursor.fetchone()
-    if not code_record:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Invalid or expired verification code")
-    cursor.execute("UPDATE verification_codes SET used = TRUE WHERE id = ?", (code_record['id'],))
-    cursor.execute("UPDATE users SET email_verified = TRUE WHERE email = ?", (email,))
-    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
-    user = cursor.fetchone()
-    conn.commit()
-    conn.close()
-    access_token = create_access_token(user['id'])
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user['id'],
-            "username": user['username'],
-            "email": user['email'],
-            "email_verified": True,
-            "created_at": user['created_at']
-        }
-    }
-@app.post("/login")
-async def login(user_data: dict):
-    email = user_data.get('email')
-    password = user_data.get('password')
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
-    user = cursor.fetchone()
-    conn.close()
-    if not user or not verify_password(password, user['password_hash']):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    if not user['email_verified']:
-        raise HTTPException(status_code=400, detail="Please verify your email first")
-    access_token = create_access_token(user['id'])
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user['id'],
-            "username": user['username'],
-            "email": user['email'],
-            "email_verified": user['email_verified'],
-            "created_at": user['created_at']
-        }
-    }
-@app.post("/forgot-password")
-async def forgot_password(email_data: dict):
-    email = email_data.get('email')
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
-    if not cursor.fetchone():
-        conn.close()
-        return {"message": "If an account exists, a reset code has been sent"}
-    reset_code = generate_verification_code()
-    expires_at = datetime.now() + timedelta(minutes=30)
-    cursor.execute(
-        "INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)",
-        (email, reset_code, "password_reset", expires_at)
-    )
-    conn.commit()
-    conn.close()
-    email_sent = await email_service.send_password_reset_email(email, reset_code)
-    return {"message": "If an account exists, a reset code has been sent", "email_sent": email_sent}
-@app.post("/reset-password")
-async def reset_password(reset_data: dict):
-    email = reset_data.get('email')
-    new_password = reset_data.get('new_password')
-    code = reset_data.get('code')
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM verification_codes WHERE email = ? AND code = ? AND type = 'password_reset' AND used = FALSE AND expires_at > ?",
-        (email, code, datetime.now())
-    )
-    code_record = cursor.fetchone()
-    if not code_record:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Invalid or expired reset code")
-    cursor.execute("UPDATE verification_codes SET used = TRUE WHERE id = ?", (code_record['id'],))
-    new_password_hash = hash_password(new_password)
-    cursor.execute(
-        "UPDATE users SET password_hash = ? WHERE email = ?",
-        (new_password_hash, email)
-    )
-    conn.commit()
-    conn.close()
-    return {"message": "Password reset successful"}
-@app.get("/me")
-async def get_current_user(token: str):
-    payload = verify_token(token)
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE id = ?", (payload['user_id'],))
-    user = cursor.fetchone()
-    conn.close()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {
-        "id": user['id'],
-        "username": user['username'],
-        "email": user['email'],
-        "email_verified": user['email_verified'],
-        "created_at": user['created_at']
-    }
-@app.get("/")
-async def root():
-    return {"message": "Forced Entry API is running!"}
+# Run the bot
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+        bot.run("MTQzNTAzNzgwODkwNDM3MjI2NA.GGyVpv.6TWfTlFPqcFdHVxdu-pwB5DnEdDRpDedq-WiZU")
